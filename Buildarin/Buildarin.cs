@@ -962,11 +962,6 @@ namespace Oxide.Plugins {
                 "• Tier 3 crafting anywhere\n" +
                 "• Instant craft\n" +
                 "• Items will not be consumed on placement\n\n" +
-                "</color>" +
-                "<size=14>Not yet implemented features:</size>\n" +
-                "<color=#CCCCCC>" +
-                "• Resources Needed\n" +
-                "• Select Spawnable" +
                 "</color>";
 
             public static string RightPanelText = "<size=14>Middle click</size>\n" +
@@ -1155,22 +1150,22 @@ namespace Oxide.Plugins {
                 CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, false, new ButtonContent("Downgrade"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.downgrade");
                 gridCoordinates = grid.GetGridCoordinates(1, 3, 5, 1);
                 CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, false, new ButtonContent("Upgrade"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.upgrade");
+//                gridCoordinates = grid.GetGridCoordinates(1, 4, 5, 1);
+//                CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, false, new ButtonContent("Select Spawnable"), gridCoordinates.aMin, gridCoordinates.aMax, null);
                 gridCoordinates = grid.GetGridCoordinates(1, 4, 5, 1);
-                CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, false, new ButtonContent("Select Spawnable"), gridCoordinates.aMin, gridCoordinates.aMax, null);
+                CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, _customPlayer.IsGradePanel, new ButtonContent("Grade Panel"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.gradepanel");
                 gridCoordinates = grid.GetGridCoordinates(1, 5, 5, 1);
                 CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, _customPlayer.IsStability, new ButtonContent("Building Stability"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.stability");
                 gridCoordinates = grid.GetGridCoordinates(1, 6, 5, 1);
-                CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, false, new ButtonContent("Resources Needed"), gridCoordinates.aMin, gridCoordinates.aMax, null);
+                if (_buildarin.TimeComponent != null) {
+                    CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, !_buildarin.TimeComponent.ProgressTime, new ButtonContent("Freeze time"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.freezetime");
+                }
+//                gridCoordinates = grid.GetGridCoordinates(1, 6, 5, 1);
+//                CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, false, new ButtonContent("Resources Needed"), gridCoordinates.aMin, gridCoordinates.aMax, null);
                 gridCoordinates = grid.GetGridCoordinates(6, 2, 10, 5);
                 CreateTextPanel(ref leftPanelContainer, PanelNames.LeftPanel, "0.1 0.1 0.1 0.7", LeftPanelText, 12, gridCoordinates.aMin, gridCoordinates.aMax);
 
                 CuiElementContainer rightPanelContainer = CreateElementContainer(PanelNames.PanelContainer, PanelNames.RightPanel, "0 0 0 0", "0.525 0.3", "0.95 0.7", true);
-                if (_buildarin.TimeComponent != null) {
-                    gridCoordinates = grid.GetGridCoordinates(6, 1, 5, 1);
-                    CreateMenuButton(ref rightPanelContainer, PanelNames.RightPanel, !_buildarin.TimeComponent.ProgressTime, new ButtonContent("Freeze time"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.freezetime");
-                }
-                gridCoordinates = grid.GetGridCoordinates(1, 1, 5, 1);
-                CreateMenuButton(ref rightPanelContainer, PanelNames.RightPanel, _customPlayer.IsGradePanel, new ButtonContent("Grade Panel"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.gradepanel");
                 gridCoordinates = grid.GetGridCoordinates(1, 2, 5, 1);
                 CreateMenuButton(ref rightPanelContainer, PanelNames.RightPanel, _customPlayer.IsCrosshair, new ButtonContent("Crosshair"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.crosshair");
                 gridCoordinates = grid.GetGridCoordinates(1, 3, 5, 1);
