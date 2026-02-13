@@ -1,0 +1,6 @@
+.idea
+buildarin.sln
+Buildarin/bin
+Buildarin/libs
+Buildarin/obj
+Buildarin/Buildarin.csproj
