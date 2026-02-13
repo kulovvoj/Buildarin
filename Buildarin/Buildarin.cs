@@ -6,6 +6,7 @@ using UnityEngine;
 using Rust;
 using Oxide.Game.Rust.Cui;
 using Oxide.Core.Plugins;
+using Oxide.Core;
 using UnityEngine.UI;
 using CompanionServer;
 using ConVar;
@@ -15,8 +16,10 @@ namespace Oxide.Plugins {
     [Description("A plugin to supply you everything you might need in day to day building")]
     class Buildarin : RustPlugin {
         public static Buildarin Instance;
+		public TOD_Time TimeComponent;
         private List<int> blueprints = new List<int>();
         private Config config = new Config();
+		private int TimeComponentSearchAttempts;
 
         [PluginReference] private Plugin ImageLibrary;
 
@@ -36,19 +39,19 @@ namespace Oxide.Plugins {
             }
 
             public List<ItemStack> craftItemList {get;} = new List<ItemStack>{
-                new ItemStack("propanetank", 100000), 
-                new ItemStack("gears", 100000), 
+                new ItemStack("propanetank", 100000),
+                new ItemStack("gears", 100000),
                 new ItemStack("metalpipe", 100000),
-                new ItemStack("metalspring", 100000), 
-                new ItemStack("metalblade", 100000), 
-                new ItemStack("riflebody", 100000), 
+                new ItemStack("metalspring", 100000),
+                new ItemStack("metalblade", 100000),
+                new ItemStack("riflebody", 100000),
                 new ItemStack("roadsigns", 100000),
-                new ItemStack("rope", 100000), 
-                new ItemStack("semibody", 100000), 
+                new ItemStack("rope", 100000),
+                new ItemStack("semibody", 100000),
                 new ItemStack("sewingkit", 100000),
                 new ItemStack("smgbody", 100000),
-                new ItemStack("tarp", 100000), 
-                new ItemStack("techparts", 100000), 
+                new ItemStack("tarp", 100000),
+                new ItemStack("techparts", 100000),
                 new ItemStack("sheetmetal", 100000),
                 new ItemStack("targeting.computer", 100000),
                 new ItemStack("cctv.camera", 100000),
@@ -162,13 +165,14 @@ namespace Oxide.Plugins {
             public bool IsAmmoInfinite {get; set;}
             public bool IsStability {get; set;}
             public bool IsCrosshair {get; set;}
+            public bool IsGradePanel {get; set;}
             public int BuildingGrade {get; set;}
             public Dictionary<int, ulong> BuildingSkins;
             public Dictionary<ulong, uint> BuildingSkinColors;
 
-            public CustomPlayer(Plugin imageLibrary, BasePlayer basePlayer) {
+            public CustomPlayer(Buildarin buildarin, BasePlayer basePlayer) {
                 BasePlayer = basePlayer;
-                Ui = new Ui(imageLibrary, this);
+                Ui = new Ui(buildarin, this);
                 Ui.RenderGradeUi();
                 IsAdmin = basePlayer.IsAdmin;
                 IsGod = true;
@@ -176,6 +180,7 @@ namespace Oxide.Plugins {
                 IsAmmoInfinite = true;
                 IsStability = true;
                 IsCrosshair = false;
+                IsGradePanel = true;
                 BuildingGrade = 0;
                 BuildingSkins = new Dictionary<int, ulong> {
                     {0, 0},
@@ -204,7 +209,9 @@ namespace Oxide.Plugins {
 
             public void SetBuildingGradeAndUpdateUi(int newGrade) {
                 BuildingGrade = newGrade;
-                Ui.RenderGradeUi();
+                if (IsGradePanel) {
+                    Ui.RenderGradeUi();
+                }
                 if (Ui.OpenPanels.Contains(Ui.PanelNames.MainMenu)) Ui.RenderMainMenuUi();
             }
 
@@ -231,10 +238,10 @@ namespace Oxide.Plugins {
 
             CustomPlayer customPlayer;
             if (!CustomPlayer.TryGetPlayer(player, out customPlayer)) {
-                customPlayer = new CustomPlayer(ImageLibrary, player);
+                customPlayer = new CustomPlayer(this, player);
                 CustomPlayer.Players[player] = customPlayer;
             }
-            
+
             timer.Repeat(600, 0, () =>
             {
                 foreach (var customPlayer in CustomPlayer.Players)
@@ -259,8 +266,8 @@ namespace Oxide.Plugins {
 
             customPlayer.Destroy();
         }
-        
-        private void OnPlayerRespawned(BasePlayer player) { 
+
+        private void OnPlayerRespawned(BasePlayer player) {
             if (player == null) return;
             CustomPlayer customPlayer;
             if (!CustomPlayer.TryGetPlayer(player, out customPlayer)) return;
@@ -271,16 +278,30 @@ namespace Oxide.Plugins {
                 SetupUserBaseItems(player);
             });
         }
-        
+
         private void OnServerInitialized() {
             foreach (BasePlayer player in BasePlayer.activePlayerList) {
                 OnPlayerConnected(player);
             }
 
+            InitTimeComponent();
             InitImageLibrary();
             SetupBlueprints();
             SetupQuickDespawn();
             SetupBedLimit();
+        }
+
+        private void InitTimeComponent() {
+			if (TOD_Sky.Instance == null) {
+				TimeComponentSearchAttempts++;
+                if (TimeComponentSearchAttempts < 10)
+                    timer.Once(1, OnServerInitialized);
+                else
+                    PrintWarning("Could not find required component after 10 attempts. Plugin disabled");
+                return;
+            }
+            TimeComponent = TOD_Sky.Instance.Components.Time;
+            TimeComponent.ProgressTime = false;
         }
 
         private void InitImageLibrary() {
@@ -296,8 +317,8 @@ namespace Oxide.Plugins {
             }
             ImageLibrary.Call("AddImage", "https://i.ibb.co/96Y3bhS/Circle.png", "Circle");
         }
-        
-        private void OnPlayerInput(BasePlayer player, InputState input) {  
+
+        private void OnPlayerInput(BasePlayer player, InputState input) {
             if (player == null || input == null) return;
 
             CustomPlayer customPlayer;
@@ -305,9 +326,9 @@ namespace Oxide.Plugins {
 
             CheckLazer(customPlayer, input);
             CheckMenuInputAndToggle(customPlayer, input);
-            
+
         }
-        
+
         private void OnEntityBuilt(Planner plan, GameObject gameObject) {
             if (plan == null || gameObject == null) return;
 
@@ -403,13 +424,13 @@ namespace Oxide.Plugins {
 
             if (arg.Args.Length > 0) {
                 switch (arg.Args[0]) {
-                    case "main": 
+                    case "main":
                         customPlayer.Ui.RenderMainMenuUi();
                         break;
                 }
             }
         }
-        
+
         [ConsoleCommand("buildarin.grade")]
         private void CommmandGrade(ConsoleSystem.Arg arg) {
             if (arg.Player() == null) return;
@@ -418,19 +439,19 @@ namespace Oxide.Plugins {
 
             if (arg.Args.Length > 0) {
                 switch (arg.Args[0]) {
-                    case "twig": 
+                    case "twig":
                         customPlayer.SetBuildingGradeAndUpdateUi(0);
                         break;
-                    case "wood": 
+                    case "wood":
                         customPlayer.SetBuildingGradeAndUpdateUi(1);
                         break;
-                    case "stone": 
+                    case "stone":
                         customPlayer.SetBuildingGradeAndUpdateUi(2);
                         break;
-                    case "metal": 
+                    case "metal":
                         customPlayer.SetBuildingGradeAndUpdateUi(3);
                         break;
-                    case "hqm": 
+                    case "hqm":
                         customPlayer.SetBuildingGradeAndUpdateUi(4);
                         break;
                 }
@@ -478,6 +499,21 @@ namespace Oxide.Plugins {
             customPlayer.Ui.RenderMainMenuUi();
         }
 
+        [ConsoleCommand("buildarin.gradepanel")]
+        private void CommandGradePanel(ConsoleSystem.Arg arg) {
+            if (arg.Player() == null) return;
+            CustomPlayer customPlayer;
+            if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
+
+            customPlayer.IsGradePanel = !customPlayer.IsGradePanel;
+            if (customPlayer.IsGradePanel) {
+                customPlayer.Ui.RenderGradeUi();
+            } else {
+                customPlayer.Ui.RemoveGradeUi();
+            }
+            customPlayer.Ui.RenderMainMenuUi();
+        }
+
         [ConsoleCommand("buildarin.noclip")]
         private void CommandNoclip(ConsoleSystem.Arg arg) {
             if (arg.Player() == null) return;
@@ -496,6 +532,16 @@ namespace Oxide.Plugins {
 
             customPlayer.IsGod = !customPlayer.IsGod;
             if (customPlayer.IsGod) RefillStats(customPlayer);
+            customPlayer.Ui.RenderMainMenuUi();
+        }
+
+        [ConsoleCommand("buildarin.freezetime")]
+        private void CommandFreezeTime(ConsoleSystem.Arg arg) {
+            if (arg.Player() == null) return;
+            CustomPlayer customPlayer;
+            if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
+
+            TimeComponent.ProgressTime = !TimeComponent.ProgressTime;
             customPlayer.Ui.RenderMainMenuUi();
         }
 
@@ -550,8 +596,8 @@ namespace Oxide.Plugins {
         }
 
         #endregion
-        
-        #region Remove Dead Bodies Methods 
+
+        #region Remove Dead Bodies Methods
 
         private void HandleCorpse(BaseNetworkable entity) {
             if (entity is PlayerCorpse || entity is DroppedItemContainer) entity.Invoke(() => entity.Kill(BaseNetworkable.DestroyMode.None), 0.1f);
@@ -560,7 +606,7 @@ namespace Oxide.Plugins {
         #endregion
 
         #region Infinite Resources Methods
-        
+
         private void CancelCraftResourceRefund(ItemCraftTask task) {
             HashSet<string> itemNameSet = config.craftItemList.Select(item => item.Name).ToHashSet();
             foreach (var takenItem in task.takenItems) {
@@ -770,7 +816,7 @@ namespace Oxide.Plugins {
                 if (PersistantPlayerInfo.unlockedItems.Contains(blueprint)) continue;
                 PersistantPlayerInfo.unlockedItems.Add(blueprint);
             }
-            
+
             player.PersistantPlayerInfo = PersistantPlayerInfo;
             player.SendNetworkUpdateImmediate();
             player.ClientRPCPlayer(null, player, "UnlockedBlueprint", 0);
@@ -787,16 +833,16 @@ namespace Oxide.Plugins {
         private void SetupBlueprints() {
             foreach (ItemBlueprint bp in ItemManager.GetBlueprints()) {
                 blueprints.Add(bp.targetItem.itemid);
-                bp.workbenchLevelRequired = 0;            
+                bp.workbenchLevelRequired = 0;
                 bp.time = 0f;
-            }          
+            }
         }
 
         #endregion
 
         #region  Default Items on Respawn Methods
 
-        private void SetupUserBaseItems(BasePlayer player) {   
+        private void SetupUserBaseItems(BasePlayer player) {
             for (var i = 0; i < 6; i++) {
                 Item item = player.inventory.containerBelt.GetSlot(i);
                 if (item == null) continue;
@@ -836,12 +882,12 @@ namespace Oxide.Plugins {
             {"hosetool.entity", LayerMask.GetMask("Deployed")},
         };
 
-        private BaseEntity GetRaycastEntity(BasePlayer player, string heldEntityName) {   
+        private BaseEntity GetRaycastEntity(BasePlayer player, string heldEntityName) {
             int layers;
             if (!heldEntityLayers.TryGetValue(heldEntityName, out layers)) return null;
             RaycastHit hit;
             UnityEngine.Physics.Raycast(player.eyes.HeadRay(), out hit, 100f, layers);
-            
+
             var ent = hit.GetEntity();
             if (ent is not BaseEntity) return null;
 
@@ -909,6 +955,43 @@ namespace Oxide.Plugins {
         #endregion
 
         public class Ui {
+            public static string LeftPanelText = "<size=14>This plugin has a couple extra features:</size>\n" +
+                "<color=#CCCCCC>" +
+                "• Prevents building from decaying\n" +
+                "• Unlocks all BPs\n" +
+                "• Tier 3 crafting anywhere\n" +
+                "• Instant craft\n" +
+                "• Items will not be consumed on placement\n\n" +
+                "</color>" +
+                "<size=14>Not yet implemented features:</size>\n" +
+                "<color=#CCCCCC>" +
+                "• Resources Needed\n" +
+                "• Select Spawnable" +
+                "</color>";
+
+            public static string RightPanelText = "<size=14>Middle click</size>\n" +
+                "<color=#CCCCCC>" +
+                "• Opens and closes menu\n" +
+                "</color>" +
+                "<size=14>Light toggle</size>\n" +
+                "<color=#CCCCCC>" +
+                "• Cycles between building grades\n" +
+                "</color>" +
+                "<size=14>Holding a tool + Sprint + Reload</size>\n" +
+                "<color=#CCCCCC>" +
+                "• Destroys an entity you're looking at\n" +
+                "• Hammer - Entity types of 'Construction', 'Default', 'Deployed', 'Resource', 'Terrain', 'Water', 'World', 'Tree'\n" +
+                "• Wire/Hose/Pipe tool - Entity type of 'Deployed'\n" +
+                "</color>" +
+                "<size=14>Holding a hammer + Sprint + Attack</size>\n" +
+                "<color=#CCCCCC>" +
+                "• Upgrades building block you're looking at to the next tier\n" +
+                "</color>" +
+                "<size=14>Holding a hammer + Duck + Attack</size>\n" +
+                "<color=#CCCCCC>" +
+                "• Downgrades building block you're looking at to the previous tier" +
+                "</color>";
+
             public static class PanelNames {
                 public const string BuildGrade = "BuildGrade";
                 public const string Crosshair = "Crosshair";
@@ -916,6 +999,8 @@ namespace Oxide.Plugins {
                 public const string CursorLayer = "CursorLayer";
                 public const string MainMenu = "MainMenu";
                 public const string MenuNavigation = "MenuNavigation";
+                public const string HeaderContainer = "HeaderContainer";
+                public const string PanelContainer = "PanelContainer";
                 public const string LeftPanel = "LeftPanel";
                 public const string BuildSkinPanel = "BuildSkinPanel";
                 public const string RightPanel = "RightPanel";
@@ -954,18 +1039,18 @@ namespace Oxide.Plugins {
 
             public HashSet<string> OpenPanels {get;} = new HashSet<string>();
             private CustomPlayer _customPlayer;
-            private Plugin _imageLibrary;
+            private Buildarin _buildarin;
             private int[] buildGrades = {(int)BuildGradeIDs.Twig, (int)BuildGradeIDs.Wood, (int)BuildGradeIDs.Stone, (int)BuildGradeIDs.Metal, (int)BuildGradeIDs.HQM};
 
-            public Ui(Plugin imageLibrary, CustomPlayer customPlayer) {
+            public Ui(Buildarin buildarin, CustomPlayer customPlayer) {
                 _customPlayer = customPlayer;
-                _imageLibrary = imageLibrary;
+                _buildarin = buildarin;
             }
 
             public void Init() {
             }
 
-            public void RenderGradeUi() {     
+            public void RenderGradeUi() {
                 CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.BuildGrade);
                 CuiElementContainer pageContainer = CreateElementContainer("Hud", PanelNames.BuildGrade, "0 0 0 0", "0.7 0.067", "0.8 0.067", false);
                 for (int i = 0; i < buildGrades.Length; i++) {
@@ -974,7 +1059,7 @@ namespace Oxide.Plugins {
                     CreatePanel(ref pageContainer, PanelNames.BuildGrade, i == _customPlayer.BuildingGrade ? "0.24 0.43 0.64 0.9" : "0.5 0.5 0.5 0.4", 0.25 * i + " 0",  0.25 * i + " 0", "-30 -30");
                     CreateSprite(ref pageContainer, PanelNames.BuildGrade, spriteImage,  i == _customPlayer.BuildingGrade ? "1 1 1 1" : "1 1 1 0.8", 0.25 * i + " 0", 0.25 * i + " 0", "-30 -30", null);
                 }
-                
+
                 CuiHelper.AddUi(_customPlayer.BasePlayer, pageContainer);
                 OpenPanels.Add(PanelNames.BuildGrade);
             }
@@ -986,16 +1071,16 @@ namespace Oxide.Plugins {
 
             public void RenderCrosshairUi() {
                 CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.Crosshair);
-                CuiElementContainer pageContainer = CreateElementContainer("Hud", PanelNames.Crosshair, "0 0 0 0",  "0.472 0.45", "0.528 0.55", false);
+                CuiElementContainer pageContainer = CreateElementContainer("Hud", PanelNames.Crosshair, "0 0 0 0",  "0 0", "1 1", false);
 
                 pageContainer.Add(new CuiPanel {
                     Image = {Color = "1 0 0 1"},
-                    RectTransform = {AnchorMin = "0.456 0.488", AnchorMax = "0.516 0.489"}
+                    RectTransform = {AnchorMin = "0.5 0.5", AnchorMax = "0.5 0.5", OffsetMin = "-3 -0.5", OffsetMax = "3 0.5"}
                 }, PanelNames.Crosshair);
 
                 pageContainer.Add(new CuiPanel {
                     Image = {Color = "1 0 0 1"},
-                    RectTransform = {AnchorMin = "0.488 0.456", AnchorMax = "0.489 0.516"}
+                    RectTransform = {AnchorMin = "0.5 0.5", AnchorMax = "0.5 0.5", OffsetMin = "-0.5 -3", OffsetMax = "0.5 3"}
                 }, PanelNames.Crosshair);
 
                 CuiHelper.AddUi(_customPlayer.BasePlayer, pageContainer);
@@ -1007,7 +1092,7 @@ namespace Oxide.Plugins {
                 OpenPanels.Remove(PanelNames.Crosshair);
             }
 
-            public void RenderEntityNameUi(string text) {     
+            public void RenderEntityNameUi(string text) {
                 CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.EntityName);
                 CuiElementContainer pageContainer = CreateElementContainer("Hud", PanelNames.EntityName, "0 0 0 0",  "0 0.4", "0.48 0.6", false);
                 CreateLabel(ref pageContainer, PanelNames.EntityName, "1 1 1 1", text, 12, "0 0", "1 1", TextAnchor.MiddleRight);
@@ -1044,16 +1129,18 @@ namespace Oxide.Plugins {
                 OpenPanels.Remove(PanelNames.MainMenu);
             }
 
-            public void RenderMainMenuUi() {    
+            public void RenderMainMenuUi() {
                 OpenPanels.Add(PanelNames.MainMenu);
 
-                Grid grid = new Grid(15, 6, 0.01175f, 0.01375f); 
+                Grid grid = new Grid(15, 6, 0.01175f, 0.01375f);
                 GridCoordinates gridCoordinates;
                 CuiElementContainer pageContainer = CreateElementContainer("Overlay", PanelNames.MainMenu, "0 0 0 0", "0 0", "1 1", false);
-                CreatePanel(ref pageContainer, PanelNames.MainMenu, "0.1 0.1 0.1 0.7", "0.0 0.925", "1 1");
-                CreateLabel(ref pageContainer, PanelNames.MainMenu, "1 1 1 1", "Main Menu", 16, "0.0 0.925", "1 1", TextAnchor.MiddleCenter);
+                CuiElementContainer headerContainer = CreateElementContainer(PanelNames.MainMenu, PanelNames.HeaderContainer, "0 0 0 0", "0.5 1", "0.5 1", false, "-640 -720", "640 0");
+                CuiElementContainer panelContainer = CreateElementContainer(PanelNames.MainMenu, PanelNames.PanelContainer, "0 0 0 0", "0.5 0.5", "0.5 0.5", false, "-640 -360", "640 360");
+                CreatePanel(ref headerContainer, PanelNames.HeaderContainer, "0.1 0.1 0.1 0.7", "0.0 0.925", "1 1");
+                CreateLabel(ref headerContainer, PanelNames.HeaderContainer, "1 1 1 1", "Main Menu", 16, "0.0 0.925", "1 1", TextAnchor.MiddleCenter);
 
-                CuiElementContainer leftPanelContainer = CreateElementContainer(PanelNames.MainMenu, PanelNames.LeftPanel, "0 0 0 0", "0.05 0.3", "0.475 0.7", true);
+                CuiElementContainer leftPanelContainer = CreateElementContainer(PanelNames.PanelContainer, PanelNames.LeftPanel, "0 0 0 0", "0.05 0.3", "0.475 0.7", true);
                 gridCoordinates = grid.GetGridCoordinates(1, 1, 3, 1);
                 CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, _customPlayer.BuildingGrade == 0, new ButtonContent("Twig"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.grade twig");
                 gridCoordinates = grid.GetGridCoordinates(4, 1, 3, 1);
@@ -1075,9 +1162,15 @@ namespace Oxide.Plugins {
                 gridCoordinates = grid.GetGridCoordinates(1, 6, 5, 1);
                 CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, false, new ButtonContent("Resources Needed"), gridCoordinates.aMin, gridCoordinates.aMax, null);
                 gridCoordinates = grid.GetGridCoordinates(6, 2, 10, 5);
-                CreatePanel(ref leftPanelContainer, PanelNames.LeftPanel, "0.1 0.1 0.1 0.7", gridCoordinates.aMin, gridCoordinates.aMax);
+                CreateTextPanel(ref leftPanelContainer, PanelNames.LeftPanel, "0.1 0.1 0.1 0.7", LeftPanelText, 12, gridCoordinates.aMin, gridCoordinates.aMax);
 
-                CuiElementContainer rightPanelContainer = CreateElementContainer(PanelNames.MainMenu, PanelNames.RightPanel, "0 0 0 0", "0.525 0.3", "0.95 0.7", true);
+                CuiElementContainer rightPanelContainer = CreateElementContainer(PanelNames.PanelContainer, PanelNames.RightPanel, "0 0 0 0", "0.525 0.3", "0.95 0.7", true);
+                if (_buildarin.TimeComponent != null) {
+                    gridCoordinates = grid.GetGridCoordinates(6, 1, 5, 1);
+                    CreateMenuButton(ref rightPanelContainer, PanelNames.RightPanel, !_buildarin.TimeComponent.ProgressTime, new ButtonContent("Freeze time"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.freezetime");
+                }
+                gridCoordinates = grid.GetGridCoordinates(1, 1, 5, 1);
+                CreateMenuButton(ref rightPanelContainer, PanelNames.RightPanel, _customPlayer.IsGradePanel, new ButtonContent("Grade Panel"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.gradepanel");
                 gridCoordinates = grid.GetGridCoordinates(1, 2, 5, 1);
                 CreateMenuButton(ref rightPanelContainer, PanelNames.RightPanel, _customPlayer.IsCrosshair, new ButtonContent("Crosshair"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.crosshair");
                 gridCoordinates = grid.GetGridCoordinates(1, 3, 5, 1);
@@ -1089,10 +1182,12 @@ namespace Oxide.Plugins {
                 gridCoordinates = grid.GetGridCoordinates(1, 6, 5, 1);
                 CreateMenuButton(ref rightPanelContainer, PanelNames.RightPanel, _customPlayer.IsGod, new ButtonContent("God Mode"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.godmode");
                 gridCoordinates = grid.GetGridCoordinates(6, 2, 10, 5);
-                CreatePanel(ref rightPanelContainer, PanelNames.RightPanel, "0.1 0.1 0.1 0.7", gridCoordinates.aMin, gridCoordinates.aMax);
+                CreateTextPanel(ref rightPanelContainer, PanelNames.RightPanel, "0.1 0.1 0.1 0.7", RightPanelText, 12, gridCoordinates.aMin, gridCoordinates.aMax);
 
                 CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.MainMenu);
                 CuiHelper.AddUi(_customPlayer.BasePlayer, pageContainer);
+                CuiHelper.AddUi(_customPlayer.BasePlayer, headerContainer);
+                CuiHelper.AddUi(_customPlayer.BasePlayer, panelContainer);
                 CuiHelper.AddUi(_customPlayer.BasePlayer, leftPanelContainer);
                 CuiHelper.AddUi(_customPlayer.BasePlayer, rightPanelContainer);
                 RenderBuildSkinPanel();
@@ -1100,7 +1195,7 @@ namespace Oxide.Plugins {
 
             public void RenderBuildSkinPanel () {
                 GridCoordinates gridCoordinates;
-                CuiElementContainer buildSkinPanelContainer = CreateElementContainer(PanelNames.MainMenu, PanelNames.BuildSkinPanel, "0 0 0 0", "0.05 0.17", "0.475 0.29", true);
+                CuiElementContainer buildSkinPanelContainer = CreateElementContainer(PanelNames.PanelContainer, PanelNames.BuildSkinPanel, "0 0 0 0", "0.05 0.17", "0.475 0.29", true);
                 Grid buildSkinGrid = new Grid(16, 3, 0.01175f, 0.05f);
 
                 var buildingGradeSkins = BuildingImages[_customPlayer.BuildingGrade];
@@ -1126,14 +1221,14 @@ namespace Oxide.Plugins {
                 CuiHelper.AddUi(_customPlayer.BasePlayer, buildSkinPanelContainer);
             }
             
-            static public CuiElementContainer CreateElementContainer(string parent, string panelName, string color, string aMin, string aMax, bool useCursor) {
+            static public CuiElementContainer CreateElementContainer(string parent, string panelName, string color, string aMin, string aMax, bool useCursor, string offsetMin = "0 0", string offsetMax = "0 0") {
                 var NewElement = new CuiElementContainer()
                 {
                     {
                         new CuiPanel
                         {
                             Image = {Color = color},
-                            RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
+                            RectTransform = {AnchorMin = aMin, AnchorMax = aMax, OffsetMin = offsetMin, OffsetMax = offsetMax},
                             CursorEnabled = useCursor,
                         },
                         new CuiElement().Parent = parent,
@@ -1159,6 +1254,23 @@ namespace Oxide.Plugins {
                     Image = {Color = color}
                 },
                 panel);
+            }
+
+            static private void CreateTextPanel(ref CuiElementContainer container, string panel, string color, string text, int fontSize, string aMin, string aMax, TextAnchor align = TextAnchor.UpperLeft) {
+                container.Add(new CuiPanel
+                {
+                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
+                    Image = {Color = color}
+                },
+                panel);
+                container.Add(new CuiElement {
+                    Components = {
+                        new CuiTextComponent { Color = "1 1 1 1", FontSize = fontSize, Align = align, Text = text },
+                        new CuiOutlineComponent { Color = "0 0 0 1" , Distance = "0.5 -0.5"},
+                        new CuiRectTransformComponent { AnchorMin = aMin, AnchorMax = aMax, OffsetMin = "5 5", OffsetMax = "-5 -5" },
+                    },
+                    Parent = panel
+                });
             }
 
             private void CreateMenuButton(ref CuiElementContainer container, string panel, bool active, ButtonContent content, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter) {
@@ -1192,9 +1304,18 @@ namespace Oxide.Plugins {
             private void CreateColorButton(ref CuiElementContainer container, string panel, bool active, string color, string aMin, string aMax, string command) {
                 var circle = new ButtonContent();
                 circle.Image = "Circle";
-                if (active) CreateSprite(ref container, panel, circle, "0.05 0.85 0.1 0.7", aMin, aMax, "-1.5 -1.5", "1.5 1.5");
-                CreateSprite(ref container, panel, circle, "0.2 0.2 0.2 1", aMin, aMax, "0 0", "0 0");
-                CreateSprite(ref container, panel, circle, color, aMin, aMax, "1.5 1.5", "-1.5 -1.5");
+//                if (active) CreateSprite(ref container, panel, circle, "0.05 0.85 0.1 0.7", aMin, aMax, "-1.5 -1.5", "1.5 1.5");
+//                CreateSprite(ref container, panel, circle, "0.2 0.2 0.2 1", aMin, aMax, "0 0", "0 0");
+//                CreateSprite(ref container, panel, circle, color, aMin, aMax, "1.5 1.5", "-1.5 -1.5");
+
+                List<float> aMinCoordinates = ParseCoordinates(aMin);
+                List<float> aMaxCoordinates = ParseCoordinates(aMax);
+                float avgX = (aMinCoordinates[0] + aMaxCoordinates[0]) / 2;
+                float avgY = (aMinCoordinates[1] + aMaxCoordinates[1]) / 2;
+                string aAvg = avgX + " " + avgY;
+                if (active) CreateSprite(ref container, panel, circle, "0.05 0.85 0.1 0.7", aAvg, aAvg, "-15 -15", "15 15");
+                CreateSprite(ref container, panel, circle, "0.2 0.2 0.2 1", aAvg, aAvg, "-13.5 -13.5", "13.5 13.5");
+                CreateSprite(ref container, panel, circle, color, aAvg, aAvg, "-12 -12", "12 12");
 
                 container.Add(new CuiElement {
                     Components = {
@@ -1237,10 +1358,10 @@ namespace Oxide.Plugins {
             private void CreateSprite(ref CuiElementContainer container, string panel, SpriteImage image, string color, string aMin, string aMax, string offsetMin, string offsetMax) {
                 CuiRawImageComponent cuiRawImageComponent = null;
                 CuiImageComponent cuiImageComponent = null;
-                if (image.Image != null && _imageLibrary != null) {
+                if (image.Image != null && _buildarin.ImageLibrary != null) {
                     cuiRawImageComponent = new CuiRawImageComponent {
                         Color = color,
-                        Png = (string) _imageLibrary.Call("GetImage", image.Image)
+                        Png = (string) _buildarin.ImageLibrary.Call("GetImage", image.Image)
                     };
                 } else if (image.Url != null) {
                     cuiRawImageComponent = new CuiRawImageComponent {
