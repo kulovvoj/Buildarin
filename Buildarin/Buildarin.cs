@@ -957,7 +957,7 @@ namespace Oxide.Plugins {
         public class Ui {
             public static string LeftPanelText = "<size=14>This plugin has a couple extra features:</size>\n" +
                 "<color=#CCCCCC>" +
-                "• Prevents building from decaying\n" +
+                "• Prevents buildings from decaying\n" +
                 "• Unlocks all BPs\n" +
                 "• Tier 3 crafting anywhere\n" +
                 "• Instant craft\n" +
