@@ -18,6 +18,9 @@ namespace Oxide.Plugins {
         public static Buildarin Instance;
 		public TOD_Time TimeComponent;
         private List<int> blueprints = new List<int>();
+        private List<ulong> wallpaperWallIDs = new List<ulong>();
+        private List<ulong> wallpaperFloorIDs = new List<ulong>();
+        private List<ulong> wallpaperCeilingIDs = new List<ulong>();
         private Config config = new Config();
 		private int TimeComponentSearchAttempts;
 
@@ -287,6 +290,10 @@ namespace Oxide.Plugins {
             InitTimeComponent();
             InitImageLibrary();
             SetupBlueprints();
+
+            SetupWallpaperIDs(wallpaperWallIDs, "wallpaper.wall");
+            SetupWallpaperIDs(wallpaperFloorIDs, "wallpaper.flooring");
+            SetupWallpaperIDs(wallpaperCeilingIDs, "wallpaper.ceiling");
             SetupQuickDespawn();
             SetupBedLimit();
         }
@@ -783,6 +790,59 @@ namespace Oxide.Plugins {
 
         #endregion
 
+        #region Wallpaper Methods
+
+        void ChangeWallpaperId(CustomPlayer customPlayer, int offset) {
+            RaycastHit hit;
+            if (!UnityEngine.Physics.Raycast(customPlayer.BasePlayer.eyes.HeadRay(), out hit, 100f, LayerMask.GetMask("Construction"))) return;
+
+            var entity = hit.GetEntity();
+
+            if (entity is BuildingBlock buildingBlock) {
+                if (buildingBlock == null) return;
+                if (buildingBlock.PrefabName.Contains("floor")) {
+                    if (buildingBlock.HasWallpaper(0) && wallpaperCeilingIDs.Count > 0) {
+                        buildingBlock.SetWallpaper(GetNewWallpaper(wallpaperCeilingIDs, buildingBlock.wallpaperID, offset), 0, 0f);
+                    }
+                    if (buildingBlock.HasWallpaper(1) && wallpaperFloorIDs.Count > 0) {
+                        buildingBlock.SetWallpaper(GetNewWallpaper(wallpaperFloorIDs, buildingBlock.wallpaperID, offset), 1, 0f);
+                    }
+                } else if (buildingBlock.PrefabName.Contains("foundation") && buildingBlock.HasWallpaper(0)) {
+                    if (wallpaperFloorIDs.Count > 0)
+                        buildingBlock.SetWallpaper(GetNewWallpaper(wallpaperFloorIDs, buildingBlock.wallpaperID, offset), 0, 0f);
+                } else if (buildingBlock.HasWallpaper(0) && wallpaperWallIDs.Count > 0) {
+                    buildingBlock.SetWallpaper(GetNewWallpaper(wallpaperWallIDs, buildingBlock.wallpaperID, offset), 0, 0f);
+                }
+            }
+        }
+
+        ulong GetNewWallpaper(List<ulong> wallpaperList, ulong currentId, int offset) {
+            var currentIndex = wallpaperList.IndexOf(currentId);
+            if (currentIndex == -1) {
+                return wallpaperList[0];
+            }
+            var newIndex = ((currentIndex + offset) % wallpaperList.Count + wallpaperList.Count) % wallpaperList.Count;
+            return wallpaperList[newIndex];
+        }
+
+        private void SetupWallpaperIDs(List<ulong> list, string itemName) {
+            if (list == null) return;
+            list.Clear();
+
+            var itemDef = ItemManager.FindItemDefinition(itemName);
+
+            if (itemDef == null) return;
+            var skins = ItemSkinDirectory.ForItem(itemDef);
+
+            if (skins == null || skins.Count() == 0) return;
+
+            foreach (var skin in skins) {
+                list.Add((ulong)skin.id);
+            }
+        }
+
+        #endregion
+
         #region Infinite Resources Methods
 
         private void RefreshItems(BasePlayer player) {
@@ -907,11 +967,20 @@ namespace Oxide.Plugins {
                 customPlayer.Ui.RemoveEntityNameUi();
             }
 
-            if (customPlayer.BasePlayer.GetHeldEntity() != null && customPlayer.BasePlayer.GetHeldEntity().ShortPrefabName == "hammer.entity" && input.WasJustPressed(BUTTON.FIRE_PRIMARY)) {
-                if (input.IsDown(BUTTON.SPRINT)) {
-                    UpgradeBuildingGrade(customPlayer);
-                } else if (input.IsDown(BUTTON.DUCK)) {
-                    DowngradeBuildingGrade(customPlayer);
+            if (customPlayer.BasePlayer.GetHeldEntity() != null) {
+                if (customPlayer.BasePlayer.GetHeldEntity().ShortPrefabName == "hammer.entity" && input.WasJustPressed(BUTTON.FIRE_PRIMARY)) {
+                    if (input.IsDown(BUTTON.SPRINT)) {
+                        UpgradeBuildingGrade(customPlayer);
+                    } else if (input.IsDown(BUTTON.DUCK)) {
+                        DowngradeBuildingGrade(customPlayer);
+                    }
+                }
+                if (customPlayer.BasePlayer.GetHeldEntity().ShortPrefabName == "wallpaper.tool.entity" && input.WasJustPressed(BUTTON.FIRE_PRIMARY)) {
+                    if (input.IsDown(BUTTON.SPRINT)) {
+                        ChangeWallpaperId(customPlayer, 1);
+                    } else if (input.IsDown(BUTTON.DUCK)) {
+                        ChangeWallpaperId(customPlayer, -1);
+                    }
                 }
             }
         }
@@ -1047,7 +1116,7 @@ namespace Oxide.Plugins {
 
             public void RenderGradeUi() {
                 CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.BuildGrade);
-                CuiElementContainer pageContainer = CreateElementContainer("Hud", PanelNames.BuildGrade, "0 0 0 0", "0.7 0.067", "0.8 0.067", false);
+                CuiElementContainer pageContainer = CreateElementContainer("Under", PanelNames.BuildGrade, "0 0 0 0", "0.7 0.067", "0.8 0.067", false);
                 for (int i = 0; i < buildGrades.Length; i++) {
                     var spriteImage = new SpriteImage();
                     spriteImage.ItemId = buildGrades[i];
@@ -1066,7 +1135,7 @@ namespace Oxide.Plugins {
 
             public void RenderCrosshairUi() {
                 CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.Crosshair);
-                CuiElementContainer pageContainer = CreateElementContainer("Hud", PanelNames.Crosshair, "0 0 0 0",  "0 0", "1 1", false);
+                CuiElementContainer pageContainer = CreateElementContainer("Under", PanelNames.Crosshair, "0 0 0 0",  "0 0", "1 1", false);
 
                 pageContainer.Add(new CuiPanel {
                     Image = {Color = "1 0 0 1"},
