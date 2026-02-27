@@ -935,22 +935,22 @@ namespace Oxide.Plugins {
 
         #region Imma firin' mah lazer Methods
 
-        private Dictionary<string, int> heldEntityLayers = new Dictionary<string, int> {
-            {"hammer.entity", LayerMask.GetMask("Construction", "Default", "Deployed", "Resource", "Terrain", "Water", "World", "Tree")},
-            {"wiretool.entity", LayerMask.GetMask("Deployed")},
-            {"pipetool.entity", LayerMask.GetMask("Deployed")},
-            {"hosetool.entity", LayerMask.GetMask("Deployed")},
+        private Dictionary<string, List<string>> heldEntityLayers = new Dictionary<string, List<string>> {
+            {"hammer.entity", new List<string> { "Construction", "Default", "Deployed", "Resource", "Terrain", "Water", "World", "Tree" } },
+            {"wiretool.entity", new List<string> { "Deployed" } },
+            {"pipetool.entity", new List<string> { "Deployed" } },
+            {"hosetool.entity", new List<string> { "Deployed" } },
         };
 
         private BaseEntity GetRaycastEntity(BasePlayer player, string heldEntityName) {
-            int layers;
+            List<String> layers;
             if (!heldEntityLayers.TryGetValue(heldEntityName, out layers)) return null;
             RaycastHit hit;
-            UnityEngine.Physics.Raycast(player.eyes.HeadRay(), out hit, 100f, layers);
+            UnityEngine.Physics.Raycast(player.eyes.HeadRay(), out hit, 100f, LayerMask.GetMask("Construction", "Default", "Deployed", "Resource", "Terrain", "Water", "World", "Tree"));
 
             var ent = hit.GetEntity();
             if (ent is not BaseEntity) return null;
-
+            if (!layers.Contains(LayerMask.LayerToName(ent.gameObject.layer))) return null;
             return ent;
         }
 
