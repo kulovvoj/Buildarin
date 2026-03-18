@@ -99,6 +99,7 @@ namespace Oxide.Plugins {
                 new("Adobe", "https://i.ibb.co/C5NMMFXV/Stone-Adobe.png", 10220),
                 new("Brick", "https://i.ibb.co/chQYYfPJ/Stone-Brick.png", 10223),
                 new("Brutalist", "https://i.ibb.co/kV4ZV5dV/Stone-Burtalist.png", 10225),
+                new("Jungle", "https://i.ibb.co/ch19Hr2g/Stone-Jungle.png", 10326),
             },
             [3] = new List<BlockInfo> {
                 new("Metal", "https://i.ibb.co/KzNn20KX/Metal-Default.png", 0),
