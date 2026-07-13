@@ -100,6 +100,7 @@ namespace Oxide.Plugins {
                 new("Brick", "https://i.ibb.co/chQYYfPJ/Stone-Brick.png", 10223),
                 new("Brutalist", "https://i.ibb.co/kV4ZV5dV/Stone-Burtalist.png", 10225),
                 new("Jungle", "https://i.ibb.co/ch19Hr2g/Stone-Jungle.png", 10326),
+                new("Crypt", "https://i.ibb.co/xNmxGyM/Stone-Crypt.png", 10472)
             },
             [3] = new List<BlockInfo> {
                 new("Metal", "https://i.ibb.co/KzNn20KX/Metal-Default.png", 0),
@@ -430,8 +431,8 @@ namespace Oxide.Plugins {
             CustomPlayer customPlayer;
             if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
 
-            if (arg.Args.Length > 0) {
-                switch (arg.Args[0]) {
+            if (arg.HasArgs(1)) {
+                switch (arg.GetString(0)) {
                     case "main":
                         customPlayer.Ui.RenderMainMenuUi();
                         break;
@@ -445,8 +446,8 @@ namespace Oxide.Plugins {
             CustomPlayer customPlayer;
             if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
 
-            if (arg.Args.Length > 0) {
-                switch (arg.Args[0]) {
+            if (arg.HasArgs(1)) {
+                switch (arg.GetString(0)) {
                     case "twig":
                         customPlayer.SetBuildingGradeAndUpdateUi(0);
                         break;
@@ -472,8 +473,8 @@ namespace Oxide.Plugins {
             CustomPlayer customPlayer;
             if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
 
-            if (arg.Args.Length > 0) {
-                if (ulong.TryParse(arg.Args[0], out ulong skinId)) {
+            if (arg.HasArgs(1)) {
+                if (ulong.TryParse(arg.GetString(0), out ulong skinId)) {
                     customPlayer.SetBuildSkinAndUpdateUi(customPlayer.BuildingGrade, skinId);
                 }
             }
@@ -485,8 +486,8 @@ namespace Oxide.Plugins {
             CustomPlayer customPlayer;
             if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
 
-            if (arg.Args.Length > 0) {
-                if (uint.TryParse(arg.Args[0], out uint colorId)) {
+            if (arg.HasArgs(1)) {
+                if (uint.TryParse(arg.GetString(0), out uint colorId)) {
                     customPlayer.SetBuildColorAndUpdateUi(customPlayer.BuildingSkins[customPlayer.BuildingGrade], colorId);
                 }
             }
@@ -880,7 +881,7 @@ namespace Oxide.Plugins {
 
             player.PersistantPlayerInfo = PersistantPlayerInfo;
             player.SendNetworkUpdateImmediate();
-            player.ClientRPCPlayer(null, player, "UnlockedBlueprint", 0);
+            player.ClientRPC(RpcTarget.Player("UnlockedBlueprint", player), 0);
         }
 
         #endregion
@@ -888,7 +889,7 @@ namespace Oxide.Plugins {
         #region No Workbench Required/Instant Craft Methods
 
         private void DisableWorkbenchRequirements(BasePlayer player) {
-            player.ClientRPCPlayer(null, player, "craftMode", 1);
+            player.ClientRPC(RpcTarget.Player("craftMode", player), 1);
         }
 
         private void SetupBlueprints() {
