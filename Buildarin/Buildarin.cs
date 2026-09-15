@@ -1062,7 +1062,7 @@ namespace Oxide.Plugins {
         #region Imma firin' mah lazer Methods
 
         private Dictionary<string, List<string>> heldEntityLayers = new Dictionary<string, List<string>> {
-            {"hammer.entity", new List<string> { "Construction", "Default", "Deployed", "Resource", "Terrain", "Water", "World", "Tree" } },
+            {"hammer.entity", new List<string> { "Construction", "Default", "Deployed", "Resource", "Terrain", "Water", "World", "Tree", "Vehicle Detailed" } },
             {"wiretool.entity", new List<string> { "Deployed" } },
             {"pipetool.entity", new List<string> { "Deployed" } },
             {"hosetool.entity", new List<string> { "Deployed" } },
@@ -1072,7 +1072,7 @@ namespace Oxide.Plugins {
             List<String> layers;
             if (!heldEntityLayers.TryGetValue(heldEntityName, out layers)) return null;
             RaycastHit hit;
-            UnityEngine.Physics.Raycast(player.eyes.HeadRay(), out hit, 100f, LayerMask.GetMask("Construction", "Default", "Deployed", "Resource", "Terrain", "Water", "World", "Tree"));
+            UnityEngine.Physics.Raycast(player.eyes.HeadRay(), out hit, 100f, ~0);
 
             var ent = hit.GetEntity();
             if (ent is not BaseEntity) return null;
