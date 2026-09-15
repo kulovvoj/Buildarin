@@ -23,6 +23,7 @@ namespace Oxide.Plugins {
         private List<ulong> wallpaperCeilingIDs = new List<ulong>();
         private Config config = new Config();
 		private int TimeComponentSearchAttempts;
+		public List<SpawnablePrefab> spawnablePrefabs = new List<SpawnablePrefab>();
 
         [PluginReference] private Plugin ImageLibrary;
 
@@ -129,6 +130,24 @@ namespace Oxide.Plugins {
             }
         };
 
+        public class SpawnablePrefab {
+            public string Name;
+            public string Value;
+
+            public SpawnablePrefab(string prefab) {
+                string value = prefab.Substring(prefab.LastIndexOf('/') + 1);
+                if (value.EndsWith(".prefab"))
+                    value = value.Substring(0, value.Length - ".prefab".Length);
+                string name = value
+                    .Replace("-", " ")
+                    .Replace("_", " ")
+                    .Replace(".", " ")
+                    .ToUpperInvariant();
+                Name = name;
+                Value = value;
+            }
+        }
+
         public class BlockInfo {
             public string Title;
             public string Url;
@@ -172,6 +191,9 @@ namespace Oxide.Plugins {
             public bool IsCrosshair {get; set;}
             public bool IsGradePanel {get; set;}
             public int BuildingGrade {get; set;}
+            public int SpawnablePage {get; set;}
+            public string SpawnableFilter  {get; set;}
+            public SpawnablePrefab SelectedSpawnable {get; set;}
             public Dictionary<int, ulong> BuildingSkins;
             public Dictionary<ulong, uint> BuildingSkinColors;
 
@@ -194,6 +216,9 @@ namespace Oxide.Plugins {
                     {3, 0},
                     {4, 0},
                 };
+                SpawnablePage = 1;
+                SpawnableFilter = "";
+                SelectedSpawnable = null;
 
                 BuildingSkinColors = new Dictionary<ulong, uint> { };
                 foreach (var list in BuildingImages) {
@@ -293,6 +318,7 @@ namespace Oxide.Plugins {
             InitImageLibrary();
             SetupBlueprints();
 
+            SetupSpawnablePrefabs();
             SetupWallpaperIDs(wallpaperWallIDs, "wallpaper.wall");
             SetupWallpaperIDs(wallpaperFloorIDs, "wallpaper.flooring");
             SetupWallpaperIDs(wallpaperCeilingIDs, "wallpaper.ceiling");
@@ -493,6 +519,14 @@ namespace Oxide.Plugins {
             }
         }
 
+        [ConsoleCommand("buildarin.spawnable")]
+        private void CommandSpawnable(ConsoleSystem.Arg arg) {
+            if (arg.Player() == null) return;
+            CustomPlayer customPlayer;
+            if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
+            SpawnableToggle(customPlayer);
+        }
+
         [ConsoleCommand("buildarin.crosshair")]
         private void CommandCrosshair(ConsoleSystem.Arg arg) {
             if (arg.Player() == null) return;
@@ -602,6 +636,68 @@ namespace Oxide.Plugins {
 
             customPlayer.IsStability = !customPlayer.IsStability;
             customPlayer.Ui.RenderMainMenuUi();
+        }
+
+        [ConsoleCommand("buildarin.selectspawnable")]
+        private void CommmandSelectSpawnable(ConsoleSystem.Arg arg) {
+            if (arg.Player() == null) return;
+            CustomPlayer customPlayer;
+            if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
+
+            if (arg.HasArgs(1)) {
+                SpawnablePrefab prefab = spawnablePrefabs.FirstOrDefault(
+                    prefab => prefab.Value.Equals(arg.GetString(0), StringComparison.OrdinalIgnoreCase)
+                );
+                customPlayer.SelectedSpawnable = prefab;
+            }
+            customPlayer.Ui.RemoveSpawnableUi();
+        }
+
+        [ConsoleCommand("buildarin.spawnablepage")]
+        private void CommmandSpawnablePage(ConsoleSystem.Arg arg) {
+            if (arg.Player() == null) return;
+            CustomPlayer customPlayer;
+            if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
+
+            if (arg.HasArgs(1) && int.TryParse(arg.GetString(0), out int page)) {
+                customPlayer.SpawnablePage = page;
+                customPlayer.Ui.RenderSpawnableSelection();
+            }
+        }
+
+        [ConsoleCommand("buildarin.spawnablefilter")]
+        private void CommmandSpawnableFilter(ConsoleSystem.Arg arg) {
+            if (arg.Player() == null) return;
+            CustomPlayer customPlayer;
+            if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
+
+            if (arg.HasArgs(1)) {
+                customPlayer.SpawnableFilter = arg.GetString(0);
+                customPlayer.Ui.RenderSpawnableSelection();
+                customPlayer.Ui.RenderSpawnableFilterClear();
+            }
+        }
+
+        [ConsoleCommand("buildarin.spawnablefilterclear")]
+        private void CommmandSpawnableFilterClear(ConsoleSystem.Arg arg) {
+            if (arg.Player() == null) return;
+            CustomPlayer customPlayer;
+            if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
+
+            customPlayer.SpawnableFilter = "";
+            customPlayer.Ui.RenderSpawnableSelection();
+            customPlayer.Ui.RenderSpawnableFilter();
+            CuiHelper.DestroyUi(customPlayer.BasePlayer, Ui.PanelNames.SpawnableFilterClear);
+        }
+
+        [ConsoleCommand("buildarin.selectedspawnableclear")]
+        private void CommmandSelectedSpawnableClear(ConsoleSystem.Arg arg) {
+            if (arg.Player() == null) return;
+            CustomPlayer customPlayer;
+            if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
+
+            customPlayer.SelectedSpawnable = null;
+            CuiHelper.DestroyUi(customPlayer.BasePlayer, Ui.PanelNames.SelectedSpawnableClear);
         }
 
         #endregion
@@ -792,6 +888,34 @@ namespace Oxide.Plugins {
 
         #endregion
 
+        #region Spawnable Prefabs Methods
+
+        private void SetupSpawnablePrefabs() {
+            var prefabs = new HashSet<string>();
+
+            foreach (var prefab in GameManifest.Current.entities) {
+                if (!string.IsNullOrEmpty(prefab) && prefab.StartsWith("Assets/bundled/Prefabs/autospawn/resource")) {
+                    spawnablePrefabs.Add(new SpawnablePrefab(prefab));
+                }
+            }
+        }
+
+        void SpawnSpawnable(CustomPlayer customPlayer) {
+            if (customPlayer.SelectedSpawnable == null) return;
+
+            Ray ray = customPlayer.BasePlayer.eyes.HeadRay();
+            RaycastHit hit;
+            if (!UnityEngine.Physics.Raycast(ray, out hit, 100f, ~0)) return;
+
+            Vector3 hitLocation = hit.point;
+            Vector3 direction = ray.direction;
+            direction.y = 0;
+            direction.Normalize();
+            Entity.svspawn(customPlayer.SelectedSpawnable.Value, hitLocation, direction);
+        }
+
+        #endregion
+
         #region Wallpaper Methods
 
         void ChangeWallpaperId(CustomPlayer customPlayer, int offset) {
@@ -960,13 +1084,17 @@ namespace Oxide.Plugins {
             BaseEntity entity;
 
             if (customPlayer.BasePlayer.GetHeldEntity() != null && input.IsDown(BUTTON.SPRINT) && (entity = GetRaycastEntity(customPlayer.BasePlayer, customPlayer.BasePlayer.GetHeldEntity().ShortPrefabName)) != null) {
-                customPlayer.Ui.RenderEntityNameUi(entity.ShortPrefabName);
+                customPlayer.Ui.RenderEntityNameUi(entity);
 
                 if (input.WasJustPressed(BUTTON.RELOAD)) {
                     entity.Kill();
                 }
             } else {
                 customPlayer.Ui.RemoveEntityNameUi();
+            }
+
+            if (input.IsDown(BUTTON.SPRINT) && input.WasJustPressed(BUTTON.USE)) {
+                SpawnSpawnable(customPlayer);
             }
 
             if (customPlayer.BasePlayer.GetHeldEntity() != null) {
@@ -1015,12 +1143,20 @@ namespace Oxide.Plugins {
         private void CheckMenuInputAndToggle(CustomPlayer customPlayer, InputState input) {
             if (input.WasJustPressed(BUTTON.FIRE_THIRD)) {
                 Ui playerUi = customPlayer.Ui;
-                if (!customPlayer.Ui.OpenPanels.Contains(Ui.PanelNames.CursorLayer)) {
+                if (!customPlayer.Ui.OpenPanels.Contains(Ui.PanelNames.MainMenu) && !customPlayer.Ui.OpenPanels.Contains(Ui.PanelNames.SpawnableMenu)) {
                     playerUi.InstantiateMenuUi();
-                } else {
+                } else if (customPlayer.Ui.OpenPanels.Contains(Ui.PanelNames.MainMenu)) {
                     playerUi.RemoveMenuUi();
+                } else if (customPlayer.Ui.OpenPanels.Contains(Ui.PanelNames.SpawnableMenu)) {
+                    playerUi.RemoveSpawnableUi();
                 }
             }
+        }
+
+        private void SpawnableToggle(CustomPlayer customPlayer) {
+            Ui playerUi = customPlayer.Ui;
+            playerUi.RemoveMenuUi();
+            playerUi.InstantiateSpawnableUi();
         }
 
         #endregion
@@ -1055,7 +1191,11 @@ namespace Oxide.Plugins {
                 "</color>" +
                 "<size=14>Holding a hammer + Duck + Attack</size>\n" +
                 "<color=#CCCCCC>" +
-                "• Downgrades building block you're looking at to the previous tier" +
+                "• Downgrades building block you're looking at to the previous tier\n" +
+                "</color>" +
+                "<size=14>Sprint + Use</size>\n" +
+                "<color=#CCCCCC>" +
+                "• Spawns an entity from the spawnable list" +
                 "</color>";
 
             public static class PanelNames {
@@ -1064,12 +1204,20 @@ namespace Oxide.Plugins {
                 public const string EntityName = "EntityName";
                 public const string CursorLayer = "CursorLayer";
                 public const string MainMenu = "MainMenu";
+                public const string SpawnableMenu = "SpawnableMenu";
                 public const string MenuNavigation = "MenuNavigation";
                 public const string HeaderContainer = "HeaderContainer";
+                public const string HeaderBackground = "HeaderBackground";
+                public const string FooterContainer = "FooterContainer";
+                public const string FooterBackground = "FooterBackground";
                 public const string PanelContainer = "PanelContainer";
                 public const string LeftPanel = "LeftPanel";
                 public const string BuildSkinPanel = "BuildSkinPanel";
                 public const string RightPanel = "RightPanel";
+                public const string SpawnablePanel = "SpawnablePanel";
+                public const string SpawnableFilter = "SpawnableFilter";
+                public const string SpawnableFilterClear = "SpawnableFilterClear";
+                public const string SelectedSpawnableClear = "SelectedSpawnableClear";
             }
 
             private class SpriteImage {
@@ -1107,6 +1255,8 @@ namespace Oxide.Plugins {
             private CustomPlayer _customPlayer;
             private Buildarin _buildarin;
             private int[] buildGrades = {(int)BuildGradeIDs.Twig, (int)BuildGradeIDs.Wood, (int)BuildGradeIDs.Stone, (int)BuildGradeIDs.Metal, (int)BuildGradeIDs.HQM};
+            private int SPAWNABLE_ROWS = 18;
+            private int SPAWNABLE_COLUMNS = 7;
 
             public Ui(Buildarin buildarin, CustomPlayer customPlayer) {
                 _customPlayer = customPlayer;
@@ -1158,10 +1308,10 @@ namespace Oxide.Plugins {
                 OpenPanels.Remove(PanelNames.Crosshair);
             }
 
-            public void RenderEntityNameUi(string text) {
+            public void RenderEntityNameUi(BaseEntity entity) {
                 CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.EntityName);
                 CuiElementContainer pageContainer = CreateElementContainer("Hud", PanelNames.EntityName, "0 0 0 0",  "0 0.4", "0.48 0.6", false);
-                CreateLabel(ref pageContainer, PanelNames.EntityName, "1 1 1 1", text, 12, "0 0", "1 1", TextAnchor.MiddleRight);
+                CreateLabel(ref pageContainer, PanelNames.EntityName, "1 1 1 1", entity.ShortPrefabName, 12, "0 0", "1 1", TextAnchor.MiddleRight);
 
                 CuiHelper.AddUi(_customPlayer.BasePlayer, pageContainer);
                 OpenPanels.Add(PanelNames.EntityName);
@@ -1195,16 +1345,131 @@ namespace Oxide.Plugins {
                 OpenPanels.Remove(PanelNames.MainMenu);
             }
 
+            public void InstantiateSpawnableUi() {
+                _customPlayer.SpawnablePage = 1;
+                _customPlayer.SpawnableFilter = "";
+
+                InstantiateCursorLayer();
+                OpenPanels.Add(PanelNames.CursorLayer);
+                RenderSpawnableUi();
+            }
+
+            public void RemoveSpawnableUi() {
+                CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.SpawnableMenu);
+                RemoveCursorLayer();
+                OpenPanels.Remove(PanelNames.CursorLayer);
+                OpenPanels.Remove(PanelNames.SpawnableMenu);
+            }
+
+            public void RenderSpawnableUi() {
+                OpenPanels.Add(PanelNames.SpawnableMenu);
+
+                GridCoordinates gridCoordinates;
+                CuiElementContainer pageContainer = CreateElementContainer("Overlay", PanelNames.SpawnableMenu, "0 0 0 0", "0 0", "1 1", false);
+                CuiElementContainer headerContainer = CreateElementContainer(PanelNames.SpawnableMenu, PanelNames.HeaderContainer, "0 0 0 0", "0.5 1", "0.5 1", false, "-640 -54", "640 0");
+                CuiElementContainer panelContainer = CreateElementContainer(PanelNames.SpawnableMenu, PanelNames.PanelContainer, "0 0 0 0", "0.5 0.5", "0.5 0.5", false, "-640 -360", "640 360");
+                CuiElementContainer footerBackground = CreateElementContainer(PanelNames.SpawnableMenu, PanelNames.FooterBackground, "0 0 0 0", "0.5 0", "0.5 0", false, "-640 0", "640 54");
+                CreatePanel(ref headerContainer, PanelNames.HeaderContainer, "0.1 0.1 0.1 0.7", "0 0", "1 1");
+                CreateLabel(ref headerContainer, PanelNames.HeaderContainer, "1 1 1 1", "Select Spawnable", 16, "0 0", "1 1", TextAnchor.MiddleCenter);
+                CreatePanel(ref footerBackground, PanelNames.FooterBackground, "0.1 0.1 0.1 0.7", "0 0", "1 1");
+
+                CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.SpawnableMenu);
+                CuiHelper.AddUi(_customPlayer.BasePlayer, pageContainer);
+                CuiHelper.AddUi(_customPlayer.BasePlayer, panelContainer);
+                CuiHelper.AddUi(_customPlayer.BasePlayer, headerContainer);
+                CuiHelper.AddUi(_customPlayer.BasePlayer, footerBackground);
+                if (_customPlayer.SelectedSpawnable != null) {
+                    RenderSelectedSpawnableClear();
+                }
+                RenderSpawnableSelection();
+                RenderSpawnableFilter();
+            }
+
+            public void RenderSpawnableSelection() {
+                List<SpawnablePrefab> filteredPrefabs;
+                if (string.IsNullOrEmpty(_customPlayer.SpawnableFilter)) {
+                    filteredPrefabs = _buildarin.spawnablePrefabs;
+                } else {
+                     filteredPrefabs = _buildarin.spawnablePrefabs
+                        .Where(prefab => prefab.Name.Contains(_customPlayer.SpawnableFilter.ToUpperInvariant()))
+                        .ToList();
+                }
+
+                GridCoordinates gridCoordinates;
+                CuiElementContainer footerContainer = CreateElementContainer(PanelNames.SpawnableMenu, PanelNames.FooterContainer, "0 0 0 0", "0.5 0", "0.5 0", false, "-640 0", "640 54");
+
+                int maxPages = (int)Math.Ceiling((double)filteredPrefabs.Count / (SPAWNABLE_ROWS * SPAWNABLE_COLUMNS));
+                if (maxPages > 0) {
+                    CreateLabel(ref footerContainer, PanelNames.FooterContainer, "1 1 1 1", $"Page {_customPlayer.SpawnablePage} / {maxPages}", 16, "0 0", "1 1", TextAnchor.MiddleCenter);
+                }
+
+                if (_customPlayer.SpawnablePage > 1) {
+                    CreateButton(ref footerContainer, PanelNames.FooterContainer, "0.1 0.1 0.1 0.7", "◄", 32, "0.41 0.1", "0.45 0.9", $"buildarin.spawnablepage {Math.Max(0, _customPlayer.SpawnablePage - 1)}");
+                }
+                if (_customPlayer.SpawnablePage < maxPages) {
+                    CreateButton(ref footerContainer, PanelNames.FooterContainer, "0.1 0.1 0.1 0.7", "►", 32, "0.55 0.1", "0.59 0.9", $"buildarin.spawnablepage {Math.Min(maxPages, _customPlayer.SpawnablePage + 1)}");
+                }
+
+                Grid grid = new Grid(SPAWNABLE_COLUMNS, SPAWNABLE_ROWS, 0.005f, 0.005f);
+                CuiElementContainer spawnablePanelContainer = CreateElementContainer(PanelNames.PanelContainer, PanelNames.SpawnablePanel, "0 0 0 0", "0.05 0.1", "0.95 0.7", true);
+                int pageOffset = SPAWNABLE_ROWS * SPAWNABLE_COLUMNS * (_customPlayer.SpawnablePage - 1);
+                for (int i = 0; i < SPAWNABLE_COLUMNS; i++) {
+                    for (int j = 0; j < SPAWNABLE_ROWS && pageOffset + j + i * SPAWNABLE_ROWS < filteredPrefabs.Count; j++) {
+                        gridCoordinates = grid.GetGridCoordinates(i + 1, SPAWNABLE_ROWS - j);
+                        int prefabIndex = pageOffset + j + i * SPAWNABLE_ROWS;
+                        string spawnableName = filteredPrefabs[prefabIndex].Name;
+                        string spawnableValue = filteredPrefabs[prefabIndex].Value;
+                        CreateMenuButton(ref spawnablePanelContainer, PanelNames.SpawnablePanel, false, new ButtonContent(spawnableName), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.selectspawnable " + spawnableValue);
+                    }
+                }
+
+
+                CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.SpawnablePanel);
+                CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.FooterContainer);
+                CuiHelper.AddUi(_customPlayer.BasePlayer, spawnablePanelContainer);
+                CuiHelper.AddUi(_customPlayer.BasePlayer, footerContainer);
+            }
+
+            public void RenderSpawnableFilter() {
+                CuiElementContainer spawnableFilter = CreateElementContainer(PanelNames.SpawnableMenu, PanelNames.SpawnableFilter, "0 0 0 0", "0.4 0.725", "0.6 0.775", false);
+
+                CreateInputField(ref spawnableFilter, PanelNames.SpawnableFilter, "0.1 0.1 0.1 0.7", "Enter text to search", 14, "0 0", "1 1", $"buildarin.spawnablefilter");
+
+                CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.SpawnableFilter);
+                CuiHelper.AddUi(_customPlayer.BasePlayer, spawnableFilter);
+            }
+
+            public void RenderSpawnableFilterClear() {
+                CuiElementContainer spawnableFilterClear = CreateElementContainer(PanelNames.SpawnableMenu, PanelNames.SpawnableFilterClear, "0 0 0 0", "0.57 0.735", "0.6 0.765", false);
+
+                CreateButton(ref spawnableFilterClear, PanelNames.SpawnableFilterClear, "0 0 0 0", "✖", 20, "0 0", "1 1", $"buildarin.spawnablefilterclear", TextAnchor.MiddleCenter, "1 0 0 1");
+
+                CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.SpawnableFilterClear);
+                CuiHelper.AddUi(_customPlayer.BasePlayer, spawnableFilterClear);
+            }
+
+            public void RenderSelectedSpawnableClear() {
+                GridCoordinates gridCoordinates;
+                CuiElementContainer selectedSpawnableClear = CreateElementContainer(PanelNames.SpawnableMenu, PanelNames.SelectedSpawnableClear, "0 0 0 0", "0.4 0.8", "0.6 0.85", false);
+
+                CreatePanel(ref selectedSpawnableClear, PanelNames.SelectedSpawnableClear, "0.05 0.85 0.1 0.7", "0 0", "1 1");
+                CreateLabel(ref selectedSpawnableClear, PanelNames.SelectedSpawnableClear, "1 1 1 1", _customPlayer.SelectedSpawnable.Name, 12, "0 0", "1 1", TextAnchor.MiddleCenter);
+                CreateButton(ref selectedSpawnableClear, PanelNames.SelectedSpawnableClear, "0 0 0 0", "✖", 20, "0.85 0", "1 1", "buildarin.selectedspawnableclear", TextAnchor.MiddleCenter, "1 0 0 1");
+
+                CuiHelper.DestroyUi(_customPlayer.BasePlayer, PanelNames.SelectedSpawnableClear);
+                CuiHelper.AddUi(_customPlayer.BasePlayer, selectedSpawnableClear);
+            }
+
             public void RenderMainMenuUi() {
                 OpenPanels.Add(PanelNames.MainMenu);
 
                 Grid grid = new Grid(15, 6, 0.01175f, 0.01375f);
                 GridCoordinates gridCoordinates;
                 CuiElementContainer pageContainer = CreateElementContainer("Overlay", PanelNames.MainMenu, "0 0 0 0", "0 0", "1 1", false);
-                CuiElementContainer headerContainer = CreateElementContainer(PanelNames.MainMenu, PanelNames.HeaderContainer, "0 0 0 0", "0.5 1", "0.5 1", false, "-640 -720", "640 0");
+                CuiElementContainer headerContainer = CreateElementContainer(PanelNames.MainMenu, PanelNames.HeaderContainer, "0 0 0 0", "0.5 1", "0.5 1", false, "-640 -54", "640 0");
                 CuiElementContainer panelContainer = CreateElementContainer(PanelNames.MainMenu, PanelNames.PanelContainer, "0 0 0 0", "0.5 0.5", "0.5 0.5", false, "-640 -360", "640 360");
-                CreatePanel(ref headerContainer, PanelNames.HeaderContainer, "0.1 0.1 0.1 0.7", "0.0 0.925", "1 1");
-                CreateLabel(ref headerContainer, PanelNames.HeaderContainer, "1 1 1 1", "Main Menu", 16, "0.0 0.925", "1 1", TextAnchor.MiddleCenter);
+                CreatePanel(ref headerContainer, PanelNames.HeaderContainer, "0.1 0.1 0.1 0.7", "0 0", "1 1");
+                CreateLabel(ref headerContainer, PanelNames.HeaderContainer, "1 1 1 1", "Main Menu", 16, "0 0", "1 1", TextAnchor.MiddleCenter);
 
                 CuiElementContainer leftPanelContainer = CreateElementContainer(PanelNames.PanelContainer, PanelNames.LeftPanel, "0 0 0 0", "0.05 0.3", "0.475 0.7", true);
                 gridCoordinates = grid.GetGridCoordinates(1, 1, 3, 1);
@@ -1237,6 +1502,8 @@ namespace Oxide.Plugins {
                 CreateTextPanel(ref leftPanelContainer, PanelNames.LeftPanel, "0.1 0.1 0.1 0.7", LeftPanelText, 12, gridCoordinates.aMin, gridCoordinates.aMax);
 
                 CuiElementContainer rightPanelContainer = CreateElementContainer(PanelNames.PanelContainer, PanelNames.RightPanel, "0 0 0 0", "0.525 0.3", "0.95 0.7", true);
+                gridCoordinates = grid.GetGridCoordinates(1, 1, 5, 1);
+                CreateMenuButton(ref rightPanelContainer, PanelNames.RightPanel, false, new ButtonContent("Select Spawnable"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.spawnable");
                 gridCoordinates = grid.GetGridCoordinates(1, 2, 5, 1);
                 CreateMenuButton(ref rightPanelContainer, PanelNames.RightPanel, _customPlayer.IsCrosshair, new ButtonContent("Crosshair"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.crosshair");
                 gridCoordinates = grid.GetGridCoordinates(1, 3, 5, 1);
@@ -1399,14 +1666,45 @@ namespace Oxide.Plugins {
                 return new List<float> {x, y};
             }
 
-            static private void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter) {
-                container.Add(new CuiButton
-                {
+            static private void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter, string textColor = "1 1 1 1") {
+                container.Add(new CuiButton {
                     Button = { Color = color, Command = command},
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
-                    Text = { Text = text, FontSize = size, Align = align }
+                    Text = { Text = text, FontSize = size, Align = align, Color = textColor }
                 },
                 panel);
+            }
+
+            static private void CreateInputField(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter) {
+                container.Add(new CuiElement {
+                    Parent = panel,
+                    Components = {
+                        new CuiImageComponent {
+                            Color = color
+                        },
+                        new CuiRectTransformComponent {
+                            AnchorMin = aMin,
+                            AnchorMax = aMax
+                        }
+                    }
+                });
+
+                container.Add(new CuiElement {
+                    Parent = panel,
+                    Components = {
+                        new CuiInputFieldComponent {
+                            Text = text,
+                            FontSize = size,
+                            Align = align,
+                            Command = command,
+                            NeedsKeyboard = true
+                        },
+                        new CuiRectTransformComponent {
+                            AnchorMin = aMin,
+                            AnchorMax = aMax
+                        }
+                    }
+                });
             }
 
             static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter) {
