@@ -673,6 +673,7 @@ namespace Oxide.Plugins {
 
             if (arg.HasArgs(1)) {
                 customPlayer.SpawnableFilter = arg.GetString(0);
+                customPlayer.SpawnablePage = 1;
                 customPlayer.Ui.RenderSpawnableSelection();
                 customPlayer.Ui.RenderSpawnableFilterClear();
             }
@@ -685,6 +686,7 @@ namespace Oxide.Plugins {
             if (!CustomPlayer.TryGetPlayer(arg.Player(), out customPlayer)) return;
 
             customPlayer.SpawnableFilter = "";
+            customPlayer.SpawnablePage = 1;
             customPlayer.Ui.RenderSpawnableSelection();
             customPlayer.Ui.RenderSpawnableFilter();
             CuiHelper.DestroyUi(customPlayer.BasePlayer, Ui.PanelNames.SpawnableFilterClear);
