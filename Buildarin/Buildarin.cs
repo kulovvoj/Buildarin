@@ -1404,10 +1404,10 @@ namespace Oxide.Plugins {
                 }
 
                 if (_customPlayer.SpawnablePage > 1) {
-                    CreateButton(ref footerContainer, PanelNames.FooterContainer, "0.1 0.1 0.1 0.7", "◄", 32, "0.41 0.1", "0.45 0.9", $"buildarin.spawnablepage {Math.Max(0, _customPlayer.SpawnablePage - 1)}", highlightedColor: "0.1 0.1 0.1 0.85");
+                    CreateButton(ref footerContainer, PanelNames.FooterContainer, "0.1 0.1 0.1 0.7", "◄", 32, "0.41 0.1", "0.45 0.9", $"buildarin.spawnablepage {Math.Max(0, _customPlayer.SpawnablePage - 1)}", highlightedColor: "0.1 0.1 0.1 0.85", pressedColor: "0.1 0.1 0.1 0.825");
                 }
                 if (_customPlayer.SpawnablePage < maxPages) {
-                    CreateButton(ref footerContainer, PanelNames.FooterContainer, "0.1 0.1 0.1 0.7", "►", 32, "0.55 0.1", "0.59 0.9", $"buildarin.spawnablepage {Math.Min(maxPages, _customPlayer.SpawnablePage + 1)}", highlightedColor: "0.1 0.1 0.1 0.85");
+                    CreateButton(ref footerContainer, PanelNames.FooterContainer, "0.1 0.1 0.1 0.7", "►", 32, "0.55 0.1", "0.59 0.9", $"buildarin.spawnablepage {Math.Min(maxPages, _customPlayer.SpawnablePage + 1)}", highlightedColor: "0.1 0.1 0.1 0.85", pressedColor: "0.1 0.1 0.1 0.825");
                 }
 
                 Grid grid = new Grid(SPAWNABLE_COLUMNS, SPAWNABLE_ROWS, 0.005f, 0.01f);
@@ -1606,10 +1606,11 @@ namespace Oxide.Plugins {
                 string buttonGuid = CuiHelper.GetGuid();
                 string color = active ? "0.05 0.85 0.1 0.7" : "0.1 0.1 0.1 0.7";
                 string highlightedColor = active ? "0.05 0.85 0.1 0.85" : "0.1 0.1 0.1 0.85";
+                string pressedColor = active ? "0.05 0.85 0.1 0.825" : "0.1 0.1 0.1 0.825";
 
                 container.Add(new CuiElement {
                     Components = {
-                        new CuiButtonComponent { PressedColor = color, SelectedColor = color, DisabledColor = color, NormalColor = color, HighlightedColor = highlightedColor, FadeDuration = 0f, Command = command},
+                        new CuiButtonComponent { PressedColor = pressedColor, SelectedColor = color, DisabledColor = color, NormalColor = color, HighlightedColor = highlightedColor, FadeDuration = 0.1f, Command = command},
                         new CuiRectTransformComponent { AnchorMin = aMin, AnchorMax = aMax },
                     },
                     Name = buttonGuid,
@@ -1662,10 +1663,10 @@ namespace Oxide.Plugins {
                 return new List<float> {x, y};
             }
 
-            static private void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter, string textColor = "1 1 1 1", string highlightedColor = null) {
+            static private void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter, string textColor = "1 1 1 1", string highlightedColor = null, string pressedColor = null) {
                 if (highlightedColor != null) {
                     container.Add(new CuiButton {
-                        Button = { PressedColor = color, SelectedColor = color, DisabledColor = color, NormalColor = color, HighlightedColor = highlightedColor, FadeDuration = 0f, Command = command },
+                        Button = { PressedColor = pressedColor != null ? pressedColor : color, SelectedColor = color, DisabledColor = color, NormalColor = color, HighlightedColor = highlightedColor, FadeDuration = 0.1f, Command = command },
                         RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
                         Text = { Text = text, FontSize = size, Align = align, Color = textColor }
                     },
