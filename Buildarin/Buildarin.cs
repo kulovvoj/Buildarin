@@ -1404,13 +1404,13 @@ namespace Oxide.Plugins {
                 }
 
                 if (_customPlayer.SpawnablePage > 1) {
-                    CreateButton(ref footerContainer, PanelNames.FooterContainer, "0.1 0.1 0.1 0.7", "◄", 32, "0.41 0.1", "0.45 0.9", $"buildarin.spawnablepage {Math.Max(0, _customPlayer.SpawnablePage - 1)}");
+                    CreateButton(ref footerContainer, PanelNames.FooterContainer, "0.1 0.1 0.1 0.7", "◄", 32, "0.41 0.1", "0.45 0.9", $"buildarin.spawnablepage {Math.Max(0, _customPlayer.SpawnablePage - 1)}", highlightedColor: "0.1 0.1 0.1 0.85");
                 }
                 if (_customPlayer.SpawnablePage < maxPages) {
-                    CreateButton(ref footerContainer, PanelNames.FooterContainer, "0.1 0.1 0.1 0.7", "►", 32, "0.55 0.1", "0.59 0.9", $"buildarin.spawnablepage {Math.Min(maxPages, _customPlayer.SpawnablePage + 1)}");
+                    CreateButton(ref footerContainer, PanelNames.FooterContainer, "0.1 0.1 0.1 0.7", "►", 32, "0.55 0.1", "0.59 0.9", $"buildarin.spawnablepage {Math.Min(maxPages, _customPlayer.SpawnablePage + 1)}", highlightedColor: "0.1 0.1 0.1 0.85");
                 }
 
-                Grid grid = new Grid(SPAWNABLE_COLUMNS, SPAWNABLE_ROWS, 0.005f, 0.005f);
+                Grid grid = new Grid(SPAWNABLE_COLUMNS, SPAWNABLE_ROWS, 0.005f, 0.01f);
                 CuiElementContainer spawnablePanelContainer = CreateElementContainer(PanelNames.PanelContainer, PanelNames.SpawnablePanel, "0 0 0 0", "0.05 0.1", "0.95 0.7", true);
                 int pageOffset = SPAWNABLE_ROWS * SPAWNABLE_COLUMNS * (_customPlayer.SpawnablePage - 1);
                 for (int i = 0; i < SPAWNABLE_COLUMNS; i++) {
@@ -1486,8 +1486,6 @@ namespace Oxide.Plugins {
                 CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, false, new ButtonContent("Downgrade"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.downgrade");
                 gridCoordinates = grid.GetGridCoordinates(1, 3, 5, 1);
                 CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, false, new ButtonContent("Upgrade"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.upgrade");
-//                gridCoordinates = grid.GetGridCoordinates(1, 4, 5, 1);
-//                CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, false, new ButtonContent("Select Spawnable"), gridCoordinates.aMin, gridCoordinates.aMax, null);
                 gridCoordinates = grid.GetGridCoordinates(1, 4, 5, 1);
                 CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, _customPlayer.IsGradePanel, new ButtonContent("Grade Panel"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.gradepanel");
                 gridCoordinates = grid.GetGridCoordinates(1, 5, 5, 1);
@@ -1496,8 +1494,6 @@ namespace Oxide.Plugins {
                 if (_buildarin.TimeComponent != null) {
                     CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, !_buildarin.TimeComponent.ProgressTime, new ButtonContent("Freeze time"), gridCoordinates.aMin, gridCoordinates.aMax, "buildarin.freezetime");
                 }
-//                gridCoordinates = grid.GetGridCoordinates(1, 6, 5, 1);
-//                CreateMenuButton(ref leftPanelContainer, PanelNames.LeftPanel, false, new ButtonContent("Resources Needed"), gridCoordinates.aMin, gridCoordinates.aMax, null);
                 gridCoordinates = grid.GetGridCoordinates(6, 2, 10, 5);
                 CreateTextPanel(ref leftPanelContainer, PanelNames.LeftPanel, "0.1 0.1 0.1 0.7", LeftPanelText, 12, gridCoordinates.aMin, gridCoordinates.aMax);
 
@@ -1607,31 +1603,31 @@ namespace Oxide.Plugins {
             }
 
             private void CreateMenuButton(ref CuiElementContainer container, string panel, bool active, ButtonContent content, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter) {
-                container.Add(new CuiPanel {
-                    Image = {Color = active ? "0.05 0.85 0.1 0.7" : "0.1 0.1 0.1 0.7"},
-                    RectTransform = {AnchorMin = aMin, AnchorMax = aMax}
-                }, panel);
+                string buttonGuid = CuiHelper.GetGuid();
+                string color = active ? "0.05 0.85 0.1 0.7" : "0.1 0.1 0.1 0.7";
+                string highlightedColor = active ? "0.05 0.85 0.1 0.85" : "0.1 0.1 0.1 0.85";
+
+                container.Add(new CuiElement {
+                    Components = {
+                        new CuiButtonComponent { PressedColor = color, SelectedColor = color, DisabledColor = color, NormalColor = color, HighlightedColor = highlightedColor, FadeDuration = 0f, Command = command},
+                        new CuiRectTransformComponent { AnchorMin = aMin, AnchorMax = aMax },
+                    },
+                    Name = buttonGuid,
+                    Parent = panel
+                });
 
                 if (content.Text != null) {
                     container.Add(new CuiElement {
                         Components = {
                             new CuiTextComponent { Color = "1 1 1 1", FontSize = 12, Align = align, Text = content.Text },
                             new CuiOutlineComponent { Color = "0 0 0 1" , Distance = "0.5 -0.5"},
-                            new CuiRectTransformComponent { AnchorMin = aMin, AnchorMax = aMax },
+                            new CuiRectTransformComponent { AnchorMin = "0 0", AnchorMax = "1 1" },
                         },
-                        Parent = panel
+                        Parent = buttonGuid
                     });
                 } else {
-                    CreateSprite(ref container, panel, content, active ? "1 1 1 1" : "1 1 1 0.8", aMin, aMax, "1 1", "-1 -1");
+                    CreateSprite(ref container, buttonGuid, content, active ? "1 1 1 1" : "1 1 1 0.8", "0 0", "1 1", "1 1", "-1 -1");
                 }
-
-                container.Add(new CuiElement {
-                    Components = {
-                        new CuiButtonComponent { Color = "0 0 0 0", Command = command},
-                        new CuiRectTransformComponent { AnchorMin = aMin, AnchorMax = aMax },
-                    }, 
-                    Parent = panel
-                });
             }
 
             private void CreateColorButton(ref CuiElementContainer container, string panel, bool active, string color, string aMin, string aMax, string command) {
@@ -1652,7 +1648,7 @@ namespace Oxide.Plugins {
 
                 container.Add(new CuiElement {
                     Components = {
-                        new CuiButtonComponent { Color = "0 0 0 0", Command = command},
+                        new CuiButtonComponent { Color = "0 0 0 0", Command = command },
                         new CuiRectTransformComponent { AnchorMin = aMin, AnchorMax = aMax },
                     },
                     Parent = panel
@@ -1666,13 +1662,22 @@ namespace Oxide.Plugins {
                 return new List<float> {x, y};
             }
 
-            static private void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter, string textColor = "1 1 1 1") {
-                container.Add(new CuiButton {
-                    Button = { Color = color, Command = command},
-                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
-                    Text = { Text = text, FontSize = size, Align = align, Color = textColor }
-                },
-                panel);
+            static private void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter, string textColor = "1 1 1 1", string highlightedColor = null) {
+                if (highlightedColor != null) {
+                    container.Add(new CuiButton {
+                        Button = { PressedColor = color, SelectedColor = color, DisabledColor = color, NormalColor = color, HighlightedColor = highlightedColor, FadeDuration = 0f, Command = command },
+                        RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
+                        Text = { Text = text, FontSize = size, Align = align, Color = textColor }
+                    },
+                    panel);
+                } else {
+                    container.Add(new CuiButton {
+                        Button = { Color = color, Command = command },
+                        RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
+                        Text = { Text = text, FontSize = size, Align = align, Color = textColor }
+                    },
+                    panel);
+                }
             }
 
             static private void CreateInputField(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter) {
