@@ -1074,7 +1074,7 @@ namespace Oxide.Plugins {
             List<String> layers;
             if (!heldEntityLayers.TryGetValue(heldEntityName, out layers)) return null;
             RaycastHit hit;
-            UnityEngine.Physics.Raycast(player.eyes.HeadRay(), out hit, 100f, ~0);
+            UnityEngine.Physics.Raycast(player.eyes.HeadRay(), out hit, 100f, LayerMask.GetMask("Construction", "Default", "Deployed", "Resource", "Terrain", "Water", "World", "Tree"));
 
             var ent = hit.GetEntity();
             if (ent is not BaseEntity) return null;
